@@ -1,0 +1,11 @@
+#wait for https://github.com/everpeace/kube-openmpi/pull/1
+#apiVersion: v1
+#kind: Pod
+#spec:
+#  containers:
+#  - name: volume-mount-hack1
+#    image: busybox
+#    command: ["sh", "-c", "mkdir /deployments/upload-dir"]
+#  - name: volume-mount-hack2
+#    image: busybox
+#    command: ["sh", "-c", "achown -R 1000:100 /deployments/upload-dir"]
