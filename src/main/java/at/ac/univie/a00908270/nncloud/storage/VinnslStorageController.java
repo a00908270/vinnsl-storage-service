@@ -44,6 +44,18 @@ public class VinnslStorageController {
 		return "uploadForm";
 	}
 	
+	@GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<Model> listUploadedFilesJson(Model model) throws IOException {
+		
+		model.addAttribute("files", storageService.loadAll().map(
+				path -> {
+					return path.getFileName().toString();
+				})
+				.collect(Collectors.toList()));
+		
+		return ResponseEntity.ok(model);
+	}
+	
 	@GetMapping("/files/{filename:.+}")
 	@ResponseBody
 	public ResponseEntity<Resource> serveFile(@PathVariable String filename) {
