@@ -15,9 +15,6 @@
  */
 package at.ac.univie.a00908270.nncloud.storage.storage;
 
-/**
- * @author Dave Syer
- */
 public class FileSystemStorageServiceTests {
 	
 	/*private StorageProperties properties = new StorageProperties();

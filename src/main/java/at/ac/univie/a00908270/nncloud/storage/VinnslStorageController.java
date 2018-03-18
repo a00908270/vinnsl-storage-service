@@ -81,14 +81,15 @@ public class VinnslStorageController {
 	@GetMapping("/files/{filename:.+}")
 	@ResponseBody
 	public HttpEntity<byte[]> serveFile(@PathVariable String filename) {
-		
-		
 		try {
 			Optional<GridFSDBFile> optionalCreated = maybeLoadFileById(filename);
 			if (optionalCreated.isPresent()) {
 				GridFSDBFile file = optionalCreated.get();
 				ByteArrayOutputStream os = new ByteArrayOutputStream();
 				file.writeTo(os);
+				/*HttpHeaders headers = new HttpHeaders();
+				headers.add(HttpHeaders.CONTENT_TYPE, created.getContentType());
+				return new HttpEntity<>(os.toByteArray(), headers);*/
 				
 				return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION,
 						"attachment; filename=\"" + file.getFilename() + "\"").body(os.toByteArray());
@@ -99,14 +100,32 @@ public class VinnslStorageController {
 		} catch (IOException e) {
 			return new ResponseEntity<>(HttpStatus.IM_USED);
 		}
-		
-		
+	}
+	
+	@GetMapping("/files/show/{filename:.+}")
+	@ResponseBody
+	public HttpEntity<byte[]> showFile(@PathVariable String filename) {
+		try {
+			Optional<GridFSDBFile> optionalCreated = maybeLoadFileById(filename);
+			if (optionalCreated.isPresent()) {
+				GridFSDBFile file = optionalCreated.get();
+				ByteArrayOutputStream os = new ByteArrayOutputStream();
+				file.writeTo(os);
+				HttpHeaders headers = new HttpHeaders();
+				headers.add(HttpHeaders.CONTENT_TYPE, file.getContentType());
+				return new HttpEntity<>(os.toByteArray(), headers);
+				
+			} else {
+				return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+			}
+		} catch (IOException e) {
+			return new ResponseEntity<>(HttpStatus.IM_USED);
+		}
 	}
 	
 	@PostMapping
 	public String handleFileUpload(@RequestParam("file") MultipartFile file,
 								   RedirectAttributes redirectAttributes) {
-		
 		try {
 			String uuidFilename = gridFsTemplate.store(file.getInputStream(), file.getOriginalFilename(), file.getContentType()).getId().toString();
 			String absolutePath = MvcUriComponentsBuilder.fromMethodName(VinnslStorageController.class, "serveFile", uuidFilename).build().toString();
@@ -128,9 +147,8 @@ public class VinnslStorageController {
 	public ResponseEntity<?> handleRestFileUpload(@RequestParam("file") MultipartFile file) {
 		Map<String, String> response = new HashMap<>();
 		
-		String name = file.getOriginalFilename();
 		try {
-			String uuidFilename = gridFsTemplate.store(file.getInputStream(), name, file.getContentType()).getId().toString();
+			String uuidFilename = gridFsTemplate.store(file.getInputStream(), file.getOriginalFilename(), file.getContentType()).getId().toString();
 			String absolutePath = MvcUriComponentsBuilder.fromMethodName(VinnslStorageController.class, "serveFile", uuidFilename).build().toString();
 			response.put("file", absolutePath);
 			
@@ -138,7 +156,6 @@ public class VinnslStorageController {
 		} catch (IOException e) {
 			return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
 		}
-		
 	}
 	
 	@DeleteMapping("/files/{filename:.+}")
