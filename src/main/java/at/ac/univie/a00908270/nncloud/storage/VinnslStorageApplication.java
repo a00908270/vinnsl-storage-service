@@ -2,6 +2,7 @@ package at.ac.univie.a00908270.nncloud.storage;
 
 import at.ac.univie.a00908270.nncloud.storage.data.StorageProperties;
 import at.ac.univie.a00908270.nncloud.storage.data.StorageService;
+import com.mongodb.MongoClientOptions;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -38,5 +39,10 @@ public class VinnslStorageApplication {
 				registry.addMapping("/storage/*").allowedOrigins("*");
 			}
 		};
+	}
+	
+	@Bean
+	public MongoClientOptions mongoOptions() {
+		return MongoClientOptions.builder().serverSelectionTimeout(2000).build();
 	}
 }
