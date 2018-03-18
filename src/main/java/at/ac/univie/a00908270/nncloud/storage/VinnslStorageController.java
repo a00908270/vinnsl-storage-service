@@ -26,14 +26,7 @@ import java.util.stream.Collectors;
 @RequestMapping("/storage")
 public class VinnslStorageController {
 	
-	//private final StorageService storageService;
-	
 	private final GridFsTemplate gridFsTemplate;
-
-//	@Autowired
-//	public VinnslStorageController(StorageService storageService) {
-//		this.storageService = storageService;
-//	}
 	
 	@Autowired
 	public VinnslStorageController(GridFsTemplate gridFsTemplate) {
@@ -67,20 +60,12 @@ public class VinnslStorageController {
 	@ResponseBody
 	public HttpEntity<byte[]> serveFileByName(@PathVariable String filename) {
 		
-		/*Resource file = storageService.loadAsResource(filename);
-		return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION,
-				"attachment; filename=\"" + file.getFilename() + "\"").body(file);
-		*/
-		
 		try {
 			Optional<GridFSDBFile> optionalCreated = maybeLoadFile(filename);
 			if (optionalCreated.isPresent()) {
 				GridFSDBFile file = optionalCreated.get();
 				ByteArrayOutputStream os = new ByteArrayOutputStream();
 				file.writeTo(os);
-				/*HttpHeaders headers = new HttpHeaders();
-				headers.add(HttpHeaders.CONTENT_TYPE, file.getContentType());
-				return new HttpEntity<>(os.toByteArray(), headers);*/
 				
 				return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION,
 						"attachment; filename=\"" + file.getFilename() + "\"").body(os.toByteArray());
@@ -97,10 +82,6 @@ public class VinnslStorageController {
 	@ResponseBody
 	public HttpEntity<byte[]> serveFile(@PathVariable String filename) {
 		
-		/*Resource file = storageService.loadAsResource(filename);
-		return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION,
-				"attachment; filename=\"" + file.getFilename() + "\"").body(file);*/
-		
 		
 		try {
 			Optional<GridFSDBFile> optionalCreated = maybeLoadFileById(filename);
@@ -108,9 +89,6 @@ public class VinnslStorageController {
 				GridFSDBFile file = optionalCreated.get();
 				ByteArrayOutputStream os = new ByteArrayOutputStream();
 				file.writeTo(os);
-				/*HttpHeaders headers = new HttpHeaders();
-				headers.add(HttpHeaders.CONTENT_TYPE, created.getContentType());
-				return new HttpEntity<>(os.toByteArray(), headers);*/
 				
 				return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION,
 						"attachment; filename=\"" + file.getFilename() + "\"").body(os.toByteArray());
@@ -148,21 +126,10 @@ public class VinnslStorageController {
 	
 	@PostMapping(value = "/upload", produces = MediaType.APPLICATION_JSON_VALUE)
 	public ResponseEntity<?> handleRestFileUpload(@RequestParam("file") MultipartFile file) {
-		/*Map<String, String> response = new HashMap<>();
-		String uuidFilename = storageService.store(file);
-		String absolutePath = MvcUriComponentsBuilder.fromMethodName(VinnslStorageController.class, "serveFile", uuidFilename).build().toString();
-		response.put("file", absolutePath);
-		
-		return ResponseEntity.ok(response);*/
-		
 		Map<String, String> response = new HashMap<>();
 		
 		String name = file.getOriginalFilename();
 		try {
-/*			Optional<GridFSDBFile> existing = maybeLoadFile(name);
-			if (existing.isPresent()) {
-				gridFsTemplate.delete(getFileByNameQuery(name));
-			}*/
 			String uuidFilename = gridFsTemplate.store(file.getInputStream(), name, file.getContentType()).getId().toString();
 			String absolutePath = MvcUriComponentsBuilder.fromMethodName(VinnslStorageController.class, "serveFile", uuidFilename).build().toString();
 			response.put("file", absolutePath);
@@ -180,15 +147,6 @@ public class VinnslStorageController {
 		return ResponseEntity.ok().build();
 	}
 	
-	/*@GetMapping(value = "/upload", produces = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<?> handleRestUrlUpload(@RequestParam("url") URL url) {
-		Map<String, String> response = new HashMap<>();
-		String uuidFilename = storageService.storeFromUrl(url);
-		String absolutePath = MvcUriComponentsBuilder.fromMethodName(VinnslStorageController.class, "serveFile", uuidFilename).build().toString();
-		response.put("file", absolutePath);
-		
-		return ResponseEntity.ok(response);
-	}*/
 	
 	@ExceptionHandler(StorageFileNotFoundException.class)
 	public ResponseEntity<?> handleStorageFileNotFound(StorageFileNotFoundException exc) {
