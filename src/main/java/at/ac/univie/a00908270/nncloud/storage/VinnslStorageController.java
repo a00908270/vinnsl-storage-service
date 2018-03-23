@@ -2,6 +2,8 @@ package at.ac.univie.a00908270.nncloud.storage;
 
 import at.ac.univie.a00908270.nncloud.storage.data.StorageFileNotFoundException;
 import com.mongodb.gridfs.GridFSDBFile;
+import io.swagger.annotations.ApiOperation;
+import org.apache.commons.io.FilenameUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.gridfs.GridFsCriteria;
@@ -16,6 +18,8 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,12 +38,13 @@ public class VinnslStorageController {
 	}
 	
 	@GetMapping
-	public String listUploadedFiles(Model model) throws IOException {
+	@ApiOperation("List all Files by FileId")
+	public String listUploadedFiles(Model model) {
 		
 		model.addAttribute("files", getFiles().stream().map(
 				path -> {
 					return MvcUriComponentsBuilder.fromMethodName(VinnslStorageController.class,
-							"serveFile", path.getId().toString()).build().toString();
+							"serveFile", path.getId().toString(), false).build().toString();
 				})
 				.collect(Collectors.toList()));
 		
@@ -47,7 +52,8 @@ public class VinnslStorageController {
 	}
 	
 	@GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<Model> listUploadedFilesJson(Model model) throws IOException {
+	@ApiOperation("List all Files")
+	public ResponseEntity<Model> listUploadedFilesJson(Model model) {
 		
 		model.addAttribute("files", getFiles().stream()
 				.map(file -> file.getId().toString())
@@ -58,6 +64,7 @@ public class VinnslStorageController {
 	
 	@GetMapping("/files/name/{filename:.+}")
 	@ResponseBody
+	@ApiOperation("Download File by Original Filename")
 	public HttpEntity<byte[]> serveFileByName(@PathVariable String filename) {
 		
 		try {
@@ -78,42 +85,27 @@ public class VinnslStorageController {
 		}
 	}
 	
-	@GetMapping("/files/{filename:.+}")
+	@GetMapping("/files/{fileId:.+}")
 	@ResponseBody
-	public HttpEntity<byte[]> serveFile(@PathVariable String filename) {
+	@ApiOperation("Download or Show File by FileID")
+	public HttpEntity<byte[]> serveFile(@PathVariable String fileId,
+										@RequestParam(value = "download", required = false) boolean download) {
 		try {
-			Optional<GridFSDBFile> optionalCreated = maybeLoadFileById(filename);
+			Optional<GridFSDBFile> optionalCreated = maybeLoadFileById(fileId);
 			if (optionalCreated.isPresent()) {
 				GridFSDBFile file = optionalCreated.get();
 				ByteArrayOutputStream os = new ByteArrayOutputStream();
 				file.writeTo(os);
-				/*HttpHeaders headers = new HttpHeaders();
-				headers.add(HttpHeaders.CONTENT_TYPE, created.getContentType());
-				return new HttpEntity<>(os.toByteArray(), headers);*/
 				
-				return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION,
-						"attachment; filename=\"" + file.getFilename() + "\"").body(os.toByteArray());
-				
-			} else {
-				return new ResponseEntity<>(HttpStatus.NOT_FOUND);
-			}
-		} catch (IOException e) {
-			return new ResponseEntity<>(HttpStatus.IM_USED);
-		}
-	}
-	
-	@GetMapping("/files/show/{filename:.+}")
-	@ResponseBody
-	public HttpEntity<byte[]> showFile(@PathVariable String filename) {
-		try {
-			Optional<GridFSDBFile> optionalCreated = maybeLoadFileById(filename);
-			if (optionalCreated.isPresent()) {
-				GridFSDBFile file = optionalCreated.get();
-				ByteArrayOutputStream os = new ByteArrayOutputStream();
-				file.writeTo(os);
-				HttpHeaders headers = new HttpHeaders();
-				headers.add(HttpHeaders.CONTENT_TYPE, file.getContentType());
-				return new HttpEntity<>(os.toByteArray(), headers);
+				if (download) {
+					return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION,
+							"attachment; filename=\"" + file.getFilename() + "\"").body(os.toByteArray());
+				} else {
+					
+					HttpHeaders headers = new HttpHeaders();
+					headers.add(HttpHeaders.CONTENT_TYPE, file.getContentType());
+					return new HttpEntity<>(os.toByteArray(), headers);
+				}
 				
 			} else {
 				return new ResponseEntity<>(HttpStatus.NOT_FOUND);
@@ -124,11 +116,12 @@ public class VinnslStorageController {
 	}
 	
 	@PostMapping
+	@ApiOperation("Handle File Upload from HTML Form")
 	public String handleFileUpload(@RequestParam("file") MultipartFile file,
 								   RedirectAttributes redirectAttributes) {
 		try {
 			String uuidFilename = gridFsTemplate.store(file.getInputStream(), file.getOriginalFilename(), file.getContentType()).getId().toString();
-			String absolutePath = MvcUriComponentsBuilder.fromMethodName(VinnslStorageController.class, "serveFile", uuidFilename).build().toString();
+			String absolutePath = MvcUriComponentsBuilder.fromMethodName(VinnslStorageController.class, "serveFile", uuidFilename, false).build().toString();
 			
 			redirectAttributes.addFlashAttribute("message",
 					"You successfully uploaded " + uuidFilename + "!");
@@ -144,13 +137,14 @@ public class VinnslStorageController {
 	}
 	
 	@PostMapping(value = "/upload", produces = MediaType.APPLICATION_JSON_VALUE)
+	@ApiOperation("Upload MultipartFile")
 	public ResponseEntity<?> handleRestFileUpload(@RequestParam("file") MultipartFile file) {
 		Map<String, String> response = new HashMap<>();
 		
 		try {
 			String uuidFilename = gridFsTemplate.store(file.getInputStream(), file.getOriginalFilename(), file.getContentType()).getId().toString();
-			String absolutePath = MvcUriComponentsBuilder.fromMethodName(VinnslStorageController.class, "serveFile", uuidFilename).build().toString();
-			response.put("file", absolutePath);
+			String absolutePath = MvcUriComponentsBuilder.fromMethodName(VinnslStorageController.class, "serveFile", uuidFilename, false).build().toString();
+			response.put("file", uuidFilename);
 			
 			return ResponseEntity.ok(response);
 		} catch (IOException e) {
@@ -158,9 +152,33 @@ public class VinnslStorageController {
 		}
 	}
 	
-	@DeleteMapping("/files/{filename:.+}")
-	public ResponseEntity deleteFile(@PathVariable String filename) {
-		gridFsTemplate.delete(new Query(GridFsCriteria.where("_id").is(filename)));
+	@GetMapping(value = "/upload", produces = MediaType.APPLICATION_JSON_VALUE)
+	@ApiOperation("Upload File by URL")
+	public ResponseEntity<?> handleRestFileUploadFromUrl(@RequestParam("url") URL url) {
+		Map<String, String> response = new HashMap<>();
+		
+		try {
+			String extension = FilenameUtils.getExtension(url.toString());
+			
+			HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+			connection.connect();
+			
+			String uuidFilename = gridFsTemplate.store(connection.getInputStream(), "upload." + extension, connection.getContentType()).getId().toString();
+			
+			connection.disconnect();
+			
+			response.put("file", uuidFilename);
+			
+			return ResponseEntity.ok(response);
+		} catch (IOException e) {
+			return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+	}
+	
+	@DeleteMapping("/files/{fileId:.+}")
+	@ApiOperation("Delete File by FileID")
+	public ResponseEntity deleteFile(@PathVariable String fileId) {
+		gridFsTemplate.delete(new Query(GridFsCriteria.where("_id").is(fileId)));
 		return ResponseEntity.ok().build();
 	}
 	
@@ -170,7 +188,7 @@ public class VinnslStorageController {
 		return ResponseEntity.notFound().build();
 	}
 	
-	
+	//TODO move into service
 	private List<GridFSDBFile> getFiles() {
 		return gridFsTemplate.find(null);
 	}
