@@ -1,6 +1,8 @@
 package at.ac.univie.a00908270.nncloud.storage;
 
 import at.ac.univie.a00908270.nncloud.storage.data.StorageFileNotFoundException;
+import com.mongodb.BasicDBObject;
+import com.mongodb.DBObject;
 import com.mongodb.gridfs.GridFSDBFile;
 import io.swagger.annotations.ApiOperation;
 import org.apache.commons.io.FilenameUtils;
@@ -42,10 +44,8 @@ public class VinnslStorageController {
 	public String listUploadedFiles(Model model) {
 		
 		model.addAttribute("files", getFiles().stream().map(
-				path -> {
-					return MvcUriComponentsBuilder.fromMethodName(VinnslStorageController.class,
-							"serveFile", path.getId().toString(), false).build().toString();
-				})
+				path -> MvcUriComponentsBuilder.fromMethodName(VinnslStorageController.class,
+						"serveFile", path.getId().toString(), false).build().toString())
 				.collect(Collectors.toList()));
 		
 		return "uploadForm";
@@ -115,6 +115,28 @@ public class VinnslStorageController {
 		}
 	}
 	
+	@GetMapping("/metadata/{fileId}")
+	@ResponseBody
+	@ApiOperation("Get File Metadata by FileID")
+	public ResponseEntity<Map<String, Object>> getMetadataFile(@PathVariable String fileId) {
+		Optional<GridFSDBFile> optionalCreated = maybeLoadFileById(fileId);
+		if (optionalCreated.isPresent()) {
+			GridFSDBFile file = optionalCreated.get();
+			
+			Map<String, Object> responseMap = new HashMap<>();
+			responseMap.put("metadata", Optional.ofNullable(file.getMetaData()).orElse(null));
+			responseMap.put("filename", file.getFilename());
+			responseMap.put("uploadDate", file.getUploadDate());
+			responseMap.put("length", file.getLength());
+			responseMap.put("contentType", file.getContentType());
+			responseMap.put("md5", file.getMD5());
+			
+			return ResponseEntity.ok(responseMap);
+		} else {
+			return ResponseEntity.notFound().build();
+		}
+	}
+	
 	@PostMapping
 	@ApiOperation("Handle File Upload from HTML Form")
 	public String handleFileUpload(@RequestParam("file") MultipartFile file,
@@ -163,7 +185,10 @@ public class VinnslStorageController {
 			HttpURLConnection connection = (HttpURLConnection) url.openConnection();
 			connection.connect();
 			
-			String uuidFilename = gridFsTemplate.store(connection.getInputStream(), "upload." + extension, connection.getContentType()).getId().toString();
+			DBObject metaData = new BasicDBObject();
+			metaData.put("sourceUrl", url.toString());
+			
+			String uuidFilename = gridFsTemplate.store(connection.getInputStream(), "upload." + extension, connection.getContentType(), metaData).getId().toString();
 			
 			connection.disconnect();
 			
